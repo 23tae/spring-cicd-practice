@@ -52,9 +52,7 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        # 현재 이미지 태그를 job의 output으로 설정
-        outputs:
-          image_tag: ${{ env.IMAGE_TAG }}
+          echo "image_tag=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
   # CD: EC2에 접속하여 최신 이미지로 컨테이너 실행
   deploy:
