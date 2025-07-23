@@ -7,15 +7,13 @@ on:
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: spring-cicd-practice
+  DEPLOY_ENV_FILE: .env.deploy
 
 jobs:
   # CI: 빌드, 테스트, Docker 이미지 생성 및 ECR 푸시
   build:
     name: CI
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.build-image.outputs.image_tag }}
-      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - name: Checkout
@@ -50,17 +48,37 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          # 1. 이미지 빌드 및 푸시
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image_tag=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+          
+          # 2. deploy job에서 사용할 변수를 파일에 저장
+          echo "ECR_REGISTRY=$ECR_REGISTRY" > ${{ env.DEPLOY_ENV_FILE }}
+          echo "IMAGE_TAG=$IMAGE_TAG" >> ${{ env.DEPLOY_ENV_FILE }}
+
+      # 3. 생성된 파일을 아티팩트(Artifact)로 업로드
+      - name: Upload artifact for deploy
+        uses: actions/upload-artifact@v3
+        with:
+          name: deploy-env
+          path: ${{ env.DEPLOY_ENV_FILE }}
 
   # CD: EC2에 접속하여 최신 이미지로 컨테이너 실행
   deploy:
     name: CD
-    needs: build # build job이 성공해야 실행됨
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v3
+        with:
+          name: deploy-env
+
+      - name: Load environment variables
+        run: |
+          cat ${{ env.DEPLOY_ENV_FILE }} >> $GITHUB_ENV
+
       - name: Deploy to EC2 instance
         uses: appleboy/ssh-action@master
         with:
@@ -68,17 +86,13 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # EC2 서버에서 ECR 로그인 (build job에서 사용된 registry 정보를 가져와 사용)
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ needs.build.outputs.ecr_registry }}
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
             
-            # 최신 Docker 이미지 pull
-            docker pull ${{ needs.build.outputs.ecr_registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image_tag }}
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
             
-            # 기존에 실행 중인 컨테이너가 있으면 중지 및 삭제
             if [ $(docker ps -q --filter "name=spring-app") ]; then
               docker stop spring-app
               docker rm spring-app
             fi
             
-            # 새 컨테이너 실행
-            docker run -d --name spring-app -p 8080:8080 ${{ needs.build.outputs.ecr_registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image_tag }}
+            docker run -d --name spring-app -p 8080:8080 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
