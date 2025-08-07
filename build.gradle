@@ -18,17 +18,24 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // AWS
     // Spring Cloud AWS 버전 관리
     implementation platform('io.awspring.cloud:spring-cloud-aws-dependencies:3.1.1')
 
     // S3
-    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3'}
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3'
+
+    // Spring Data JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // MySQL
+    runtimeOnly 'com.mysql:mysql-connector-j'
+}
 
 tasks.named('test') {
 	useJUnitPlatform()
