@@ -81,4 +81,8 @@ jobs:
             fi
             
             # 새 컨테이너 실행
-            docker run -d --name spring-app -p 8080:8080 ${IMAGE_NAME}
+            docker run -d --name spring-app -p 8080:8080 \
+              -e DB_URL="${{ secrets.DB_URL }}" \
+              -e DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              ${IMAGE_NAME}
